@@ -1,0 +1,4 @@
+(sym_lib_table
+  (lib (name Commodore)(type Legacy)(uri ${KIPRJMOD}/../Commodore.lib)(options "")(descr ""))
+  (lib (name DigiKey_Level_Shifters)(type Legacy)(uri "C:/Users/Matt Mullins/Downloads/digikey-kicad-library/digikey-symbols/dk_Logic-Translators-Level-Shifters.lib")(options "")(descr ""))
+)
