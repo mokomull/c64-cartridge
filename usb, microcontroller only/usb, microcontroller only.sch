@@ -391,7 +391,7 @@ F 3 "~" H 9150 1950 50  0001 C CNN
 	-1   0    0    -1  
 $EndComp
 Text Notes 7050 7050 0    50   ~ 0
-* none of the bypass capacitors exist yet\n* the crystal is chosen at random, series resistance still needs to be evaluated\n* combinatoric logic for "chip enable" is still todo\n* PA4 and PA5 seem to only be 3.3V
+* none of the bypass capacitors exist yet\n* the crystal is chosen at random, series resistance still needs to be evaluated\n* combinatoric logic for "chip enable" is still todo\n* PA4 and PA5 seem to only be 3.3V\n* what do I do with VBAT
 $Comp
 L power:GND #PWR?
 U 1 1 5EEB8F44
@@ -727,6 +727,30 @@ Wire Wire Line
 	7300 3400 7600 3400
 Wire Wire Line
 	7600 3500 7300 3500
+$Comp
+L Device:C C?
+U 1 1 5EE9FD77
+P 5650 2250
+F 0 "C?" H 5765 2296 50  0000 L CNN
+F 1 "4u7" H 5765 2205 50  0000 L CNN
+F 2 "" H 5688 2100 50  0001 C CNN
+F 3 "~" H 5650 2250 50  0001 C CNN
+	1    5650 2250
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	5650 2100 5900 2100
+$Comp
+L power:GND #PWR?
+U 1 1 5EEA598D
+P 5650 2400
+F 0 "#PWR?" H 5650 2150 50  0001 C CNN
+F 1 "GND" H 5655 2227 50  0000 C CNN
+F 2 "" H 5650 2400 50  0001 C CNN
+F 3 "" H 5650 2400 50  0001 C CNN
+	1    5650 2400
+	1    0    0    -1  
+$EndComp
 Wire Bus Line
 	7700 1800 7700 5200
 Wire Bus Line
