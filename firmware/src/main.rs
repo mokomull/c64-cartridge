@@ -42,7 +42,32 @@ fn main() -> ! {
         &mut peripherals.GPIOC,
     );
 
-    loop {}
+    // turn on the green LED to show we're ready to go
+    let gpiod = peripherals.GPIOD.split();
+    let mut green_led = gpiod.pd12.into_push_pull_output();
+    green_led.set_high().unwrap();
+
+    loop {
+        // wait for #ROMH to go low
+        while !is_rom_request(&peripherals.GPIOB) {}
+
+        // the top 16 bits are "reserved" per the datasheet
+        let address: u16 = peripherals.GPIOC.idr.read().bits() as u16;
+
+        if (0x8000..=0x9fff).contains(&address) {
+            // mix the top byte of the address so I can at least check the results
+            let data: u8 = (address & 0xff) as u8 ^ ((address >> 8) & 0x7f) as u8;
+            drive_data_bus(&mut peripherals.GPIOA, &mut peripherals.GPIOB, data);
+        }
+
+        // stop driving the bus once it's no longer our turn
+        while is_rom_request(&peripherals.GPIOB) {}
+        setup_direction(
+            &mut peripherals.GPIOA,
+            &mut peripherals.GPIOB,
+            DataBus::Listen,
+        );
+    }
 }
 
 fn setup_cartridge(gpioa: &mut stm32::GPIOA, gpiob: &mut stm32::GPIOB, gpioc: &mut stm32::GPIOC) {
@@ -129,4 +154,29 @@ fn setup_direction(gpioa: &mut stm32::GPIOA, gpiob: &mut stm32::GPIOB, direction
         w.moder14().variant(INPUT); // C64: R/#W
         w.moder15().variant(INPUT) // C64: PHI2
     });
+}
+
+fn is_rom_request(gpiob: &stm32::GPIOB) -> bool {
+    let bits = gpiob.idr.read();
+    let phi2 = bits.idr15().bit();
+    let roml = bits.idr10().bit();
+
+    phi2 && !roml
+}
+
+fn drive_data_bus(gpioa: &mut stm32::GPIOA, gpiob: &mut stm32::GPIOB, data: u8) {
+    // SAFETY: the bits of GPIO port A are either the data bus (in the right bit positions), unconnected, or
+    // configured as alternate functions (and thus not affected by the ODR)
+    gpioa.odr.write(|w| unsafe { w.bits(data as u32) });
+
+    // but we need to extract bits 4 and 5, and not disturb the other control bits that are being
+    // output (particularly, #GAME and #EXROM)
+    let data4: bool = data & (1 << 4) != 0;
+    let data5: bool = data & (1 << 5) != 0;
+    gpiob.odr.modify(|_r, w| {
+        w.odr0().bit(data4);
+        w.odr1().bit(data5)
+    });
+
+    setup_direction(gpioa, gpiob, DataBus::Drive);
 }

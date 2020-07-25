@@ -4,3 +4,4 @@ rustflags = ["-C", "link-arg=-Tlink.x"]
 
 [profile.release]
 opt-level = "z"
+debug = true
