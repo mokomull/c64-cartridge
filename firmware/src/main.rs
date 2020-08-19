@@ -159,8 +159,9 @@ fn is_rom_request(gpiob: &stm32::GPIOB) -> bool {
     let bits = gpiob.idr.read();
     let phi2 = bits.idr15().bit();
     let roml = bits.idr10().bit();
+    let r_notw = bits.idr14().bit();
 
-    phi2 && !roml
+    phi2 && r_notw && !roml
 }
 
 fn drive_data_bus(gpioa: &mut stm32::GPIOA, gpiob: &mut stm32::GPIOB, data: u8) {
