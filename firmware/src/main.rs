@@ -92,9 +92,8 @@ fn setup_cartridge(gpioa: &mut stm32::GPIOA, gpiob: &mut stm32::GPIOB, gpioc: &m
         w.moder15().variant(INPUT)
     });
 
-    // setup #GAME, #EXROM values before setting drive, to avoid flappy values
+    // setup #EXROM values before setting drive, to avoid flappy values
     gpiob.bsrr.write(|w| {
-        w.bs5().set_bit(); // don't assert #GAME
         w.br6().set_bit() // but do assert #EXROM to get 0x8000..=0xBFFF mapped
     });
 
@@ -142,7 +141,7 @@ fn setup_direction(gpioa: &mut stm32::GPIOA, gpiob: &mut stm32::GPIOB, direction
         w.moder2().variant(INPUT); // NMI
         w.moder3().variant(ALTERNATE); // TDO
         w.moder4().variant(ALTERNATE); // #JTRST
-        w.moder5().variant(OUTPUT); // C64: #GAME
+        w.moder5().variant(INPUT); // C64: #GAME - tri-state is pulled-up inside the C64
         w.moder6().variant(OUTPUT); // C64: #EXROM
         w.moder7().variant(INPUT); // C64: #RESET
         w.moder8().variant(INPUT); // C64: #IRO
