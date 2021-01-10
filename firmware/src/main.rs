@@ -61,12 +61,9 @@ fn main() -> ! {
         // the top 16 bits are "reserved" per the datasheet
         let address: u16 = peripherals.GPIOC.idr.read().bits() as u16;
 
-        if (0x8000..=0x9fff).contains(&address) {
-            // mix the top byte of the address so I can at least check the results
-            let data: u8 =
-                unsafe { core::ptr::read_volatile(frogger.offset(address as isize & !0x8000)) };
-            drive_data_bus(&mut peripherals.GPIOA, &mut peripherals.GPIOB, data);
-        }
+        let data: u8 =
+            unsafe { core::ptr::read_volatile(frogger.offset(address as isize & 0x1fff)) };
+        drive_data_bus(&mut peripherals.GPIOA, &mut peripherals.GPIOB, data);
 
         // stop driving the bus once it's no longer our turn
         while is_rom_request(&peripherals.GPIOB) {}
