@@ -3,6 +3,7 @@
 
 use panic_itm as _;
 
+use static_assertions::const_assert;
 use stm32f4xx_hal::prelude::*;
 use stm32f4xx_hal::stm32;
 
@@ -10,6 +11,8 @@ enum DataBus {
     Listen,
     Drive,
 }
+
+static FROGGER: &[u8; 8192] = include_bytes!("frogger.img");
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -36,6 +39,10 @@ fn main() -> ! {
         });
     }
 
+    let frogger_cache: [u8; 8192] = FROGGER.clone();
+    const_assert!(8192 == (0x9fff - 0x8000 + 1));
+    let frogger: *const u8 = &frogger_cache[0];
+
     setup_cartridge(
         &mut peripherals.GPIOA,
         &mut peripherals.GPIOB,
@@ -56,7 +63,8 @@ fn main() -> ! {
 
         if (0x8000..=0x9fff).contains(&address) {
             // mix the top byte of the address so I can at least check the results
-            let data: u8 = (address & 0xff) as u8 ^ ((address >> 8) & 0x7f) as u8;
+            let data: u8 =
+                unsafe { core::ptr::read_volatile(frogger.offset(address as isize & !0x8000)) };
             drive_data_bus(&mut peripherals.GPIOA, &mut peripherals.GPIOB, data);
         }
 
@@ -157,11 +165,11 @@ fn setup_direction(gpioa: &mut stm32::GPIOA, gpiob: &mut stm32::GPIOB, direction
 
 fn is_rom_request(gpiob: &stm32::GPIOB) -> bool {
     let bits = gpiob.idr.read();
-    let phi2 = bits.idr15().bit();
+    // let phi2 = bits.idr15().bit();
     let roml = bits.idr10().bit();
     let r_notw = bits.idr14().bit();
 
-    phi2 && r_notw && !roml
+    r_notw && !roml
 }
 
 fn drive_data_bus(gpioa: &mut stm32::GPIOA, gpiob: &mut stm32::GPIOB, data: u8) {
