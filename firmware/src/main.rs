@@ -12,7 +12,7 @@ enum DataBus {
     Drive,
 }
 
-static FROGGER: &[u8; 8192] = include_bytes!("frogger.img");
+static FROGGER: &[u8; 8192] = include_bytes!("hello_world.bin");
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
