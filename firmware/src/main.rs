@@ -3,7 +3,6 @@
 
 use panic_itm as _;
 
-use static_assertions::const_assert;
 use stm32f4xx_hal::prelude::*;
 use stm32f4xx_hal::stm32;
 
@@ -39,10 +38,6 @@ fn main() -> ! {
         });
     }
 
-    let frogger_cache: [u8; 8192] = FROGGER.clone();
-    const_assert!(8192 == (0x9fff - 0x8000 + 1));
-    let frogger: *const u8 = &frogger_cache[0];
-
     setup_cartridge(
         &mut peripherals.GPIOA,
         &mut peripherals.GPIOB,
@@ -61,10 +56,9 @@ fn main() -> ! {
         // the top 16 bits are "reserved" per the datasheet
         let address: u16 = peripherals.GPIOC.idr.read().bits() as u16;
 
-        if (0x8000..=0x9fff).contains(&address) {
-            // mix the top byte of the address so I can at least check the results
-            let data: u8 =
-                unsafe { core::ptr::read_volatile(frogger.offset(address as isize & !0x8000)) };
+        if (0x8000..0xa000).contains(&address) {
+            let data: u8 = unsafe { *FROGGER.get_unchecked(address as usize - 0x8000) };
+
             drive_data_bus(&mut peripherals.GPIOA, &mut peripherals.GPIOB, data);
         }
 
