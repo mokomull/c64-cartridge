@@ -1,12 +1,17 @@
+screen_chars = $0400
+
+kb_row = $DC00
+kb_column = $DC01
+
 * = $8000
     ; this is just here to make dxa disassemble things in a friendly manner
     .word start
 
 start:
     ; clear the screen
-    lda #$00
+    lda #<screen_chars
     sta $FB
-    lda #$04
+    lda #>screen_chars
     sta $FC
     lda #32
     jsr set_screen_bytes    
@@ -24,7 +29,62 @@ start:
 
     lda #1
     jsr set_screen_bytes
-    rts
+
+scan_keyboard:
+    ; $FB-FC are the screen buffer where we'll display the results
+    lda #<screen_chars
+    sta $FB
+    lda #>screen_chars
+    sta $FC
+
+    ; A will be written to the keyboard columns
+    lda #$01
+
+scan_row:
+    sta kb_row
+    pha
+
+    lda kb_column
+    ldy #0 ; Y is the bit index that we're showing
+show_bit:
+    lsr
+    bcs show_one
+
+    ; A is the byte we want to display for this bit
+    ; X saves the keyboard row bits while we're doing this.
+    tax
+    lda #87 ; bold O
+    jmp show_next
+
+show_one:
+    tax
+    lda #86 ; bold X
+
+show_next:
+    sta ($FB), Y
+    txa
+
+    ; skip a character to give visual space between displayed bits
+    iny
+    iny
+    cpy #16
+    bne show_bit
+
+    ; increment the buffer address by 80 - give some space between bits
+    lda #80
+    clc
+    adc $FB
+    sta $FB
+    lda #0
+    adc $FC
+    sta $FC
+
+    pla
+    asl
+    ; restart the scanning when we're done
+    beq scan_keyboard
+    ; otherwise scan the next row
+    jmp scan_row
 
 // sets a screen (25x40) full of data to a given byte
 // input: A: data to write to the screen buffer
