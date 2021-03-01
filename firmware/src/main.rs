@@ -11,7 +11,7 @@ enum DataBus {
     Drive,
 }
 
-static FROGGER: &[u8; 8192] = include_bytes!(concat!(env!("OUT_DIR"), "/hello_world.bin"));
+static ROM_IMAGE: &[u8; 8192] = include_bytes!(concat!(env!("OUT_DIR"), "/rom_image.bin"));
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -57,7 +57,7 @@ fn main() -> ! {
         let address: u16 = peripherals.GPIOC.idr.read().bits() as u16;
 
         if (0x8000..0xa000).contains(&address) {
-            let data: u8 = unsafe { *FROGGER.get_unchecked(address as usize - 0x8000) };
+            let data: u8 = unsafe { *ROM_IMAGE.get_unchecked(address as usize - 0x8000) };
 
             drive_data_bus(&mut peripherals.GPIOA, &mut peripherals.GPIOB, data);
         }

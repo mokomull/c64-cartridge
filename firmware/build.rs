@@ -13,10 +13,10 @@ fn main() {
     let mut child = Command::new("xa")
         .args(&[
             "-C",
-            "src/hello_world.S",
+            "src/rom_image.S",
             "-o",
             out_dir
-                .join("hello_world.bin")
+                .join("rom_image.bin")
                 .to_str()
                 .expect("path should be valid UTF-8"),
         ])
