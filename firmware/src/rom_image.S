@@ -37,8 +37,8 @@ scan_keyboard:
     lda #>screen_chars
     sta $FC
 
-    ; A will be written to the keyboard columns
-    lda #$01
+    ; A will be written to the keyboard rows
+    lda #$FE
 
 scan_row:
     sta kb_row
@@ -48,7 +48,7 @@ scan_row:
     ldy #0 ; Y is the bit index that we're showing
 show_bit:
     lsr
-    bcs show_one
+    bcc show_key_down
 
     ; A is the byte we want to display for this bit
     ; X saves the keyboard row bits while we're doing this.
@@ -56,7 +56,7 @@ show_bit:
     lda #87 ; bold O
     jmp show_next
 
-show_one:
+show_key_down:
     tax
     lda #86 ; bold X
 
@@ -80,9 +80,10 @@ show_next:
     sta $FC
 
     pla
-    asl
-    ; restart the scanning when we're done
-    beq scan_keyboard
+    sec ; rotate in a 1 bit
+    rol
+    ; restart the scanning when we rotate-out the 0 bit
+    bcc scan_keyboard
     ; otherwise scan the next row
     jmp scan_row
 
