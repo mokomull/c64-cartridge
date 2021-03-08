@@ -3,5 +3,5 @@ target = "thumbv7em-none-eabihf"
 rustflags = ["-C", "link-arg=-Tlink.x"]
 
 [profile.release]
-opt-level = "z"
+# opt-level = "z"
 debug = true

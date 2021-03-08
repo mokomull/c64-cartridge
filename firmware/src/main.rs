@@ -1,17 +1,34 @@
 #![no_main]
 #![no_std]
+#![feature(default_alloc_error_handler)]
 
+use core::fmt::{Debug, Write};
+
+use bytes::Buf;
 use panic_itm as _;
 
+use alloc_cortex_m::CortexMHeap;
+use arraydeque::{behavior::Wrapping, ArrayDeque};
 use stm32f4xx_hal::prelude::*;
-use stm32f4xx_hal::stm32;
+use stm32f4xx_hal::stm32::{self, GPIOA, OTG_FS_DEVICE, OTG_FS_GLOBAL, OTG_FS_PWRCLK};
+use usb_device::device::{UsbDeviceBuilder, UsbVidPid};
+
+#[global_allocator]
+static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
 
 enum DataBus {
     Listen,
     Drive,
 }
 
+struct Trace {
+    timestamp: u32,
+    address: u16,
+}
+
 static ROM_IMAGE: &[u8; 8192] = include_bytes!(concat!(env!("OUT_DIR"), "/rom_image.bin"));
+
+static mut EP_MEMORY: [u32; 256] = [0; 256];
 
 #[cortex_m_rt::entry]
 fn main() -> ! {
@@ -23,8 +40,17 @@ fn main() -> ! {
         .constrain()
         .cfgr
         .use_hse(8.mhz())
+        .require_pll48clk()
         .sysclk(168.mhz())
         .freeze();
+
+    {
+        let start = cortex_m_rt::heap_start();
+        let size = 1024;
+        unsafe {
+            ALLOCATOR.init(start as usize, size);
+        }
+    }
 
     // enable the GPIO blocks I'll be using
     {
@@ -47,14 +73,44 @@ fn main() -> ! {
     // turn on the green LED to show we're ready to go
     let gpiod = peripherals.GPIOD.split();
     let mut green_led = gpiod.pd12.into_push_pull_output();
+    let mut red_led = gpiod.pd14.into_push_pull_output();
+    let switch_to_usb = gpiod.pd8.into_pull_up_input();
     green_led.set_high().unwrap();
+    red_led.set_low().unwrap();
+
+    let mut trace = ArrayDeque::<[Trace; 512], Wrapping>::new();
+
+    let mut syst = core_peripherals.SYST;
+    syst.set_reload(0xffffff);
+    syst.clear_current();
+    syst.enable_counter();
 
     loop {
         // wait for #ROMH to go low
-        while !is_rom_request(&peripherals.GPIOB) {}
+        loop {
+            if is_rom_request(&peripherals.GPIOB) {
+                break;
+            }
+            // or if it is now time to switch to being a USB device to dump the data
+            if switch_to_usb.is_low().unwrap() {
+                do_usb(
+                    red_led,
+                    peripherals.GPIOA,
+                    peripherals.OTG_FS_GLOBAL,
+                    peripherals.OTG_FS_DEVICE,
+                    peripherals.OTG_FS_PWRCLK,
+                    trace,
+                );
+            }
+        }
 
         // the top 16 bits are "reserved" per the datasheet
         let address: u16 = peripherals.GPIOC.idr.read().bits() as u16;
+
+        trace.push_back(Trace {
+            timestamp: cortex_m::peripheral::SYST::get_current(),
+            address,
+        });
 
         if (0x8000..0xa000).contains(&address) {
             let data: u8 = unsafe { *ROM_IMAGE.get_unchecked(address as usize - 0x8000) };
@@ -69,6 +125,73 @@ fn main() -> ! {
             &mut peripherals.GPIOB,
             DataBus::Listen,
         );
+    }
+}
+
+fn do_usb<LED>(
+    mut led: LED,
+    gpioa: GPIOA,
+    fs_global: OTG_FS_GLOBAL,
+    fs_device: OTG_FS_DEVICE,
+    fs_pwrclk: OTG_FS_PWRCLK,
+    mut trace: ArrayDeque<[Trace; 512], Wrapping>,
+) -> !
+where
+    LED: embedded_hal::digital::v2::OutputPin,
+    LED::Error: Debug,
+{
+    led.set_high().unwrap();
+
+    let gpioa = gpioa.split();
+
+    let usb_pins = stm32f4xx_hal::otg_fs::USB {
+        usb_global: fs_global,
+        usb_device: fs_device,
+        usb_pwrclk: fs_pwrclk,
+        pin_dm: gpioa.pa11.into_alternate_af10(),
+        pin_dp: gpioa.pa12.into_alternate_af10(),
+    };
+    let bus = stm32f4xx_hal::otg_fs::UsbBus::new(usb_pins, unsafe { &mut EP_MEMORY });
+    let mut serial = usbd_serial::SerialPort::new(&bus);
+    let mut usb_dev = UsbDeviceBuilder::new(&bus, UsbVidPid(0x1337, 0x4242))
+        .manufacturer("Matt Mullins")
+        .product("Commodore 64 USB cartridge")
+        .serial_number("1")
+        .build();
+
+    let mut buffer = bytes::BytesMut::new();
+    let mut started = false;
+
+    loop {
+        if buffer.is_empty() {
+            if started {
+                match trace.pop_front() {
+                    Some(event) => {
+                        buffer = bytes::BytesMut::with_capacity(40);
+                        write!(buffer, "0x{:04x} at {}\r\n", event.address, event.timestamp)
+                            .unwrap();
+                    }
+                    None => {}
+                }
+            }
+        } else {
+            match serial.write(&buffer) {
+                Ok(count) => buffer.advance(count),
+                Err(_) => {
+                    // silently eat errors for now, hopefully this works
+                }
+            }
+        }
+
+        let mut junk = [0u8; 1];
+        match serial.read(&mut junk) {
+            Ok(x) if x > 0 => {
+                started = true;
+            }
+            _ => {}
+        }
+
+        usb_dev.poll(&mut [&mut serial]);
     }
 }
 
